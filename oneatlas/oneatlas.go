@@ -2,6 +2,7 @@ package oneatlas
 
 import "encoding/json"
 import "errors"
+import "io"
 import "log"
 import "net/http"
 import "net/url"
@@ -35,12 +36,10 @@ type oneatlasError struct {
 }
 
 func (c *Client) Search() ([]Feature, error) {
-	u := c.BaseURL
-	req, err := http.NewRequest("GET", u.String(), nil)
+	req, err := c.newRequest("GET", "/api/v1/opensearch", nil)
 	if err != nil {
 		return nil, nil
 	}
-	req.Header.Set("Accept", "application/json")
 
 	resp, err := c.httpClient.Do(req)
 	if err != nil {
@@ -59,8 +58,22 @@ func (c *Client) Search() ([]Feature, error) {
 	return fC.Features, err
 }
 
+func (c *Client) newRequest(method, path string, body io.Reader) (*http.Request, error) {
+	rel := &url.URL{Path: path}
+	u := c.BaseURL.ResolveReference(rel)
+
+	req, err := http.NewRequest(method, u.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Set("Accept", "application/json")
+
+	return req, nil
+}
+
 func NewClient(httpClient *http.Client) *Client {
-	u, err := url.Parse("https://search.oneatlas.geoapi-airbusds.com/api/v1/opensearch")
+	u, err := url.Parse("https://search.oneatlas.geoapi-airbusds.com")
 	if err != nil {
 		log.Fatal(err)
 	}
