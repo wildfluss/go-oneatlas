@@ -1,5 +1,6 @@
 package oneatlas
 
+import "context"
 import "encoding/json"
 import "errors"
 import "io"
@@ -35,14 +36,14 @@ type oneatlasError struct {
 	Message string `json:"message"`
 }
 
-func (c *Client) Search() ([]Feature, error) {
+func (c *Client) Search(ctx context.Context) ([]Feature, error) {
 	req, err := c.newRequest("GET", "/api/v1/opensearch", nil)
 	if err != nil {
 		return nil, nil
 	}
 
 	var fC featureCollection
-	_, err = c.do(req, &fC)
+	_, err = c.do(ctx, req, &fC)
 	return fC.Features, err
 }
 
@@ -60,10 +61,22 @@ func (c *Client) newRequest(method, path string, body io.Reader) (*http.Request,
 	return req, nil
 }
 
-func (c *Client) do(req *http.Request, v interface{}) (*http.Response, error) {
+func (c *Client) do(ctx context.Context, req *http.Request, v interface{}) (*http.Response, error) {
+	if ctx == nil {
+		return nil, errors.New("context must be non-nil")
+	}
+	req = req.WithContext(ctx)
 	resp, err := c.httpClient.Do(req)
 	if err != nil {
-		return nil, nil
+		// If we got an error, and the context has been canceled,
+		// the context's error is probably more useful.
+		select {
+		case <-ctx.Done():
+			return nil, ctx.Err()
+		default:
+		}
+
+		return nil, err
 	}
 	defer resp.Body.Close()
 

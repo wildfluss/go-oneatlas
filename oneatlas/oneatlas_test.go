@@ -1,5 +1,6 @@
 package oneatlas
 
+import "context"
 import "fmt"
 import "golang.org/x/oauth2"
 import "os"
@@ -23,7 +24,7 @@ func ExampleSearch() {
 
 	client := NewClient(tc)
 
-	features, err := client.Search()
+	features, err := client.Search(context.Background())
 	if err != nil {
 		panic(err)
 	}
