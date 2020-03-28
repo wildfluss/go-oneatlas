@@ -41,20 +41,8 @@ func (c *Client) Search() ([]Feature, error) {
 		return nil, nil
 	}
 
-	resp, err := c.httpClient.Do(req)
-	if err != nil {
-		return nil, nil
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != 200 {
-		var err oneatlasError
-		json.NewDecoder(resp.Body).Decode(&err)
-		return nil, errors.New(err.Message)
-	}
-
 	var fC featureCollection
-	err = json.NewDecoder(resp.Body).Decode(&fC)
+	_, err = c.do(req, &fC)
 	return fC.Features, err
 }
 
@@ -70,6 +58,23 @@ func (c *Client) newRequest(method, path string, body io.Reader) (*http.Request,
 	req.Header.Set("Accept", "application/json")
 
 	return req, nil
+}
+
+func (c *Client) do(req *http.Request, v interface{}) (*http.Response, error) {
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return nil, nil
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != 200 {
+		var err oneatlasError
+		json.NewDecoder(resp.Body).Decode(&err)
+		return nil, errors.New(err.Message)
+	}
+
+	err = json.NewDecoder(resp.Body).Decode(v)
+	return resp, err
 }
 
 func NewClient(httpClient *http.Client) *Client {
