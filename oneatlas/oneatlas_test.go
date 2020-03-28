@@ -24,11 +24,12 @@ func ExampleSearch() {
 
 	client := NewClient(tc)
 
-	features, err := client.Search(context.Background())
+	filters := &SearchFilters{Bbox: "-122.537,37.595,-122.303,37.807"}
+	features, err := client.Search(context.Background(), filters)
 	if err != nil {
 		panic(err)
 	}
-	fmt.Printf("%v\n", features)
+	fmt.Printf("%d images within a bounding box over San Francisco\n", len(features))
 
 	// Output:
 	// TODO
