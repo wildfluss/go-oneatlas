@@ -20,7 +20,7 @@ type Feature struct {
 }
 
 type featureCollection struct {
-	features []Feature
+	Features []Feature
 }
 
 type Client struct {
@@ -56,7 +56,7 @@ func (c *Client) Search() ([]Feature, error) {
 
 	var fC featureCollection
 	err = json.NewDecoder(resp.Body).Decode(&fC)
-	return fC.features, err
+	return fC.Features, err
 }
 
 func NewClient(httpClient *http.Client) *Client {
