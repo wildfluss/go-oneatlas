@@ -1,24 +1,29 @@
 package oneatlas
 
-import "context"
-import "encoding/json"
-import "errors"
-import "fmt"
-import "github.com/google/go-querystring/query"
-import "io"
-import "log"
-import "net/http"
-import "net/url"
-import "reflect"
-import "strings"
+import (
+	"bytes"
+	"context"
+	"encoding/json"
+	"errors"
+	"fmt"
+	"io"
+	"io/ioutil"
+	"log"
+	"net/http"
+	"net/url"
+	"reflect"
+	"strings"
+
+	"github.com/google/go-querystring/query"
+)
 
 type Link struct {
 	Href string `json:"href"`
 }
 
 type links struct {
-	Delete          Link `json:"delete"`
-	ImagesGetBuffer Link `json:"imagesGetBuffer"`
+	Delete          json.RawMessage/*Link*/ `json:"delete"`
+	ImagesGetBuffer json.RawMessage/*Link*/ `json:"imagesGetBuffer"`
 }
 
 type Feature struct {
@@ -34,6 +39,8 @@ type Client struct {
 	BaseURL *url.URL
 
 	httpClient *http.Client
+
+	Authenticate *AuthenticateService
 }
 
 type oneatlasError struct {
@@ -79,6 +86,9 @@ func (c *Client) newRequest(method, path string, body io.Reader) (*http.Request,
 	}
 
 	req.Header.Set("Accept", "application/json")
+	if body != nil {
+		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	}
 
 	return req, nil
 }
@@ -103,21 +113,45 @@ func (c *Client) do(ctx context.Context, req *http.Request, v interface{}) (*htt
 	defer resp.Body.Close()
 
 	if resp.StatusCode != 200 {
-		var err oneatlasError
-		json.NewDecoder(resp.Body).Decode(&err)
-		return nil, errors.New(err.Message)
+		// var err oneatlasError
+		// json.NewDecoder(resp.Body).Decode(&err)
+		// return nil, errors.New(err.Message)
+
+		bytes, _ := ioutil.ReadAll(resp.Body)
+		return nil, errors.New(string(bytes))
 	}
 
-	err = json.NewDecoder(resp.Body).Decode(v)
+	body, _ := ioutil.ReadAll(resp.Body)
+	ioutil.WriteFile("oneatlas.json", body, 0644)
+	// log.Printf("%+v\n", string(body))
+
+	err = json.NewDecoder(bytes.NewReader(body) /*resp.Body*/).Decode(v)
 	return resp, err
 }
 
 func NewClient(httpClient *http.Client) *Client {
+	if httpClient == nil {
+		httpClient = &http.Client{}
+	}
+
 	u, err := url.Parse("https://search.oneatlas.geoapi-airbusds.com/")
 	if err != nil {
 		log.Fatal(err)
 	}
+	// TODO SearchService
 	c := &Client{httpClient: httpClient, BaseURL: u}
+
+	u, err = url.Parse("https://authenticate.foundation.api.oneatlas.airbus.com/")
+	if err != nil {
+		log.Fatal(err)
+	}
+	c.Authenticate = &AuthenticateService{
+		c: Client{
+			httpClient: httpClient,
+			BaseURL:    u,
+		},
+	}
+
 	return c
 }
 
@@ -140,4 +174,35 @@ func addFilters(s string, filters interface{}) (string, error) {
 
 	u.RawQuery = qs.Encode()
 	return u.String(), nil
+}
+
+type AuthenticateService struct {
+	c Client
+}
+
+type getAccessTokenResponse struct {
+	AccessToken string `json:"access_token"`
+	ExpiresIn   int    `json:"expires_in"`
+	// RefreshExpiresin int `json:"refresh_expires_in"`
+	// TokenType string `json:"token_type"`
+}
+
+// Get an access token.
+//
+// OneAtlas API docs: http://www.geoapi-airbusds.com/guides/g-authentication/
+func (s *AuthenticateService) GetAccessToken(ctx context.Context, APIKey string) (string, error) {
+	v := url.Values{}
+	v.Set("apikey", APIKey)
+	v.Set("grant_type", "api_key")
+	v.Set("client_id", "IDP")
+
+	req, err := s.c.newRequest("POST", "auth/realms/IDP/protocol/openid-connect/token", strings.NewReader(v.Encode()))
+	if err != nil {
+		return "", err
+	}
+
+	var resp getAccessTokenResponse
+	_, err = s.c.do(ctx, req, &resp)
+
+	return resp.AccessToken, err
 }
