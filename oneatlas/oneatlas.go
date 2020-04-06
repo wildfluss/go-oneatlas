@@ -21,9 +21,32 @@ type Link struct {
 	Href string `json:"href"`
 }
 
+type Links struct {
+	Links []Link
+}
+
+func (a *Links) UnmarshalJSON(b []byte) error {
+	if bytes.HasPrefix(b, []byte{'['}) { // bytes.TrimSpace(b)?
+
+		json.Unmarshal(b, &a.Links)
+
+		// log.Printf("links = %+v\n", a.Links)
+
+		return nil
+	}
+
+	var tmp Link
+	json.Unmarshal(b, &tmp)
+	a.Links = []Link{tmp}
+
+	// log.Printf("links = %+v\n", a.Links)
+
+	return nil
+}
+
 type links struct {
-	Delete          json.RawMessage/*Link*/ `json:"delete"`
-	ImagesGetBuffer json.RawMessage/*Link*/ `json:"imagesGetBuffer"`
+	Delete          Links `json:"delete"`
+	ImagesGetBuffer Links `json:"imagesGetBuffer"`
 }
 
 type Feature struct {
